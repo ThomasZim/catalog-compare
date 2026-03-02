@@ -114,3 +114,31 @@ def auto_detect_columns(headers: list[str]) -> dict[str, int | None]:
                 result["name"] = i
 
     return result
+
+
+def auto_detect_base_columns(headers: list[str]) -> dict[str, int | None]:
+    """Auto-détecte les colonnes supplémentaires du CSV base (Shopify).
+
+    Détecte : price (prix de vente), inventory_qty, continue_selling.
+    """
+    result = {"price": None, "inventory_qty": None, "continue_selling": None}
+
+    lower_headers = [h.lower().strip() for h in headers]
+
+    for i, h in enumerate(lower_headers):
+        # Price : chercher "price"/"prix" en excluant "cost"/"cout"/"compare"
+        if result["price"] is None and ("price" in h or "prix" in h):
+            if not any(excl in h for excl in ["cost", "cout", "coût", "compare"]):
+                result["price"] = i
+
+        # Inventory qty : "inventory" + "qty"/"quantity", ou "stock"
+        if result["inventory_qty"] is None:
+            if ("inventory" in h and ("qty" in h or "quantity" in h)) or h == "stock":
+                result["inventory_qty"] = i
+
+        # Continue selling : "inventory policy" ou "continue selling"
+        if result["continue_selling"] is None:
+            if "inventory policy" in h or "continue selling" in h:
+                result["continue_selling"] = i
+
+    return result

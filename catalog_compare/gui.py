@@ -6,7 +6,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from .comparator import ComparisonResult, compare_catalogs
-from .csv_parser import auto_detect_columns, parse_csv
+from .csv_exporter import export_modified_csv
+from .csv_parser import auto_detect_base_columns, auto_detect_columns, parse_csv
 from .pdf_report import generate_pdf
 
 # Colors
@@ -85,8 +86,8 @@ class App(tk.Tk):
         card = tk.Frame(self._container, bg=BG_CARD, padx=30, pady=25, relief="flat", highlightbackground="#e0e0e0", highlightthickness=1)
         card.pack(fill="x", padx=60)
 
-        # Old catalog
-        self._old_label = self._file_row(card, "Old catalog", self._browse_old)
+        # Base catalog
+        self._old_label = self._file_row(card, "Base catalog", self._browse_old)
 
         # Separator
         tk.Frame(card, bg="#e0e0e0", height=1).pack(fill="x", pady=12)
@@ -129,7 +130,7 @@ class App(tk.Tk):
 
     def _browse_old(self):
         path = filedialog.askopenfilename(
-            title="Select the old catalog",
+            title="Select the base catalog",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
         )
         if path:
@@ -181,11 +182,15 @@ class App(tk.Tk):
         old_card = tk.Frame(mapping_frame, bg=BG_CARD, padx=15, pady=12, highlightbackground="#e0e0e0", highlightthickness=1)
         old_card.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
 
-        tk.Label(old_card, text=f"Old ({len(self.old_rows)} rows)", font=("Helvetica", 12, "bold"), bg=BG_CARD, fg=TEXT).pack(anchor="w", pady=(0, 8))
+        tk.Label(old_card, text=f"Base ({len(self.old_rows)} rows)", font=("Helvetica", 12, "bold"), bg=BG_CARD, fg=TEXT).pack(anchor="w", pady=(0, 8))
 
         old_detected = auto_detect_columns(self.old_headers)
+        old_base_detected = auto_detect_base_columns(self.old_headers)
         self._old_barcode, self._old_cost, self._old_name = self._create_mapping_widgets(
             old_card, self.old_headers, old_detected
+        )
+        self._old_price, self._old_inv_qty, self._old_continue_selling = self._create_base_mapping_widgets(
+            old_card, self.old_headers, old_base_detected
         )
         self._create_preview(old_card, self.old_headers, self.old_rows[:3])
 
@@ -224,10 +229,10 @@ class App(tk.Tk):
         frame = tk.Frame(parent, bg=BG_CARD)
         frame.pack(fill="x")
 
-        for label_text, key in [("Barcode", "barcode"), ("Cost", "cost"), ("Product name", "name")]:
+        for label_text, key in [("Index", "barcode"), ("Cost", "cost"), ("Product name", "name")]:
             row = tk.Frame(frame, bg=BG_CARD)
             row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{label_text}:", font=("Helvetica", 10), bg=BG_CARD, fg=TEXT, width=12, anchor="w").pack(side="left")
+            tk.Label(row, text=f"{label_text}:", font=("Helvetica", 10), bg=BG_CARD, fg=TEXT, width=16, anchor="w").pack(side="left")
             var = tk.StringVar(value=headers[detected[key]] if detected[key] is not None else options[0])
             ttk.Combobox(row, textvariable=var, values=options, state="readonly", width=25).pack(side="left", fill="x", expand=True)
             if key == "barcode":
@@ -238,6 +243,27 @@ class App(tk.Tk):
                 name_var = var
 
         return barcode_var, cost_var, name_var
+
+    def _create_base_mapping_widgets(self, parent, headers, detected):
+        options = ["-- Select --"] + headers
+
+        frame = tk.Frame(parent, bg=BG_CARD)
+        frame.pack(fill="x")
+
+        for label_text, key in [("Final price", "price"), ("Inventory qty", "inventory_qty"), ("Continue selling", "continue_selling")]:
+            row = tk.Frame(frame, bg=BG_CARD)
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=f"{label_text}:", font=("Helvetica", 10), bg=BG_CARD, fg=TEXT, width=16, anchor="w").pack(side="left")
+            var = tk.StringVar(value=headers[detected[key]] if detected[key] is not None else options[0])
+            ttk.Combobox(row, textvariable=var, values=options, state="readonly", width=25).pack(side="left", fill="x", expand=True)
+            if key == "price":
+                price_var = var
+            elif key == "inventory_qty":
+                inv_qty_var = var
+            else:
+                continue_selling_var = var
+
+        return price_var, inv_qty_var, continue_selling_var
 
     def _create_preview(self, parent, headers, rows):
         tk.Label(parent, text="Preview:", font=("Helvetica", 9, "bold"), bg=BG_CARD, fg=TEXT_LIGHT).pack(anchor="w", pady=(10, 3))
@@ -271,6 +297,9 @@ class App(tk.Tk):
         old_barcode = self._get_col_index(self._old_barcode, self.old_headers)
         old_cost = self._get_col_index(self._old_cost, self.old_headers)
         old_name = self._get_col_index(self._old_name, self.old_headers)
+        old_price = self._get_col_index(self._old_price, self.old_headers)
+        old_inv_qty = self._get_col_index(self._old_inv_qty, self.old_headers)
+        old_continue = self._get_col_index(self._old_continue_selling, self.old_headers)
 
         new_barcode = self._get_col_index(self._new_barcode, self.new_headers)
         new_cost = self._get_col_index(self._new_cost, self.new_headers)
@@ -278,13 +307,19 @@ class App(tk.Tk):
 
         missing = []
         if old_barcode is None:
-            missing.append("Barcode (old)")
+            missing.append("Index (base)")
         if old_cost is None:
-            missing.append("Cost (old)")
+            missing.append("Cost (base)")
         if old_name is None:
-            missing.append("Name (old)")
+            missing.append("Name (base)")
+        if old_price is None:
+            missing.append("Final price (base)")
+        if old_inv_qty is None:
+            missing.append("Inventory qty (base)")
+        if old_continue is None:
+            missing.append("Continue selling (base)")
         if new_barcode is None:
-            missing.append("Barcode (new)")
+            missing.append("Index (new)")
         if new_cost is None:
             missing.append("Cost (new)")
         if new_name is None:
@@ -293,6 +328,13 @@ class App(tk.Tk):
         if missing:
             messagebox.showwarning("Missing columns", "Please select:\n- " + "\n- ".join(missing))
             return
+
+        # Stocker les indices des colonnes base pour l'export CSV
+        self._base_price_col = old_price
+        self._base_inv_qty_col = old_inv_qty
+        self._base_continue_col = old_continue
+        self._base_barcode_col = old_barcode
+        self._base_cost_col = old_cost
 
         try:
             self.result = compare_catalogs(
@@ -320,7 +362,7 @@ class App(tk.Tk):
         summary_frame = tk.Frame(self._container, bg=BG)
         summary_frame.pack(fill="x", pady=(0, 10))
 
-        self._summary_card(summary_frame, "Old", f"{r.old_count}", "#e8e8ed", TEXT)
+        self._summary_card(summary_frame, "Base", f"{r.old_count}", "#e8e8ed", TEXT)
         self._summary_card(summary_frame, "New", f"{r.new_count}", "#e8e8ed", TEXT)
         self._summary_card(summary_frame, "Added", str(len(r.appeared)), "#d1f2d9", "#1b7a2e")
         self._summary_card(summary_frame, "Removed", str(len(r.disappeared)), "#fdd", "#c0392b")
@@ -333,13 +375,13 @@ class App(tk.Tk):
         # Added tab
         tab_app = tk.Frame(notebook, bg=BG)
         notebook.add(tab_app, text=f" Added ({len(r.appeared)}) ")
-        self._create_result_table(tab_app, ["Barcode", "Name", "Cost"],
+        self._create_result_table(tab_app, ["Index", "Name", "Cost"],
                                   [(p.barcode, p.name, f"{p.cost:.2f}" if p.cost else "N/A") for p in r.appeared])
 
         # Removed tab
         tab_dis = tk.Frame(notebook, bg=BG)
         notebook.add(tab_dis, text=f" Removed ({len(r.disappeared)}) ")
-        self._create_result_table(tab_dis, ["Barcode", "Name", "Cost"],
+        self._create_result_table(tab_dis, ["Index", "Name", "Cost"],
                                   [(p.barcode, p.name, f"{p.cost:.2f}" if p.cost else "N/A") for p in r.disappeared])
 
         # Changes tab
@@ -347,7 +389,7 @@ class App(tk.Tk):
         notebook.add(tab_chg, text=f" Changes ({len(r.cost_changes)}) ")
         self._create_result_table(
             tab_chg,
-            ["Barcode", "Old name", "New name", "Old", "New", "Change"],
+            ["Index", "Base name", "New name", "Base", "New", "Change"],
             [(c.barcode, c.old_name,
               c.new_name if c.name_changed else "-",
               f"{c.old_cost:.2f}" if c.old_cost is not None else "N/A",
@@ -367,6 +409,26 @@ class App(tk.Tk):
             padx=20, pady=6, cursor="hand2",
         ).pack(side="left", padx=8)
 
+        # Multiplier + Export CSV
+        tk.Label(
+            btn_frame, text="Multiplier:", font=("Helvetica", 10),
+            bg=BG, fg=TEXT,
+        ).pack(side="left", padx=(16, 4))
+
+        self._multiplier_var = tk.StringVar(value="2.5")
+        ttk.Combobox(
+            btn_frame, textvariable=self._multiplier_var,
+            values=["1.0", "1.5", "2.0", "2.5", "3.0", "4.0"],
+            state="readonly", width=5,
+        ).pack(side="left")
+
+        tk.Button(
+            btn_frame, text="Export CSV", command=self._export_csv,
+            font=("Helvetica", 12, "bold"), relief="flat",
+            bg=GREEN, fg=TEXT, activebackground="#2aa04a", activeforeground=TEXT,
+            padx=20, pady=6, cursor="hand2",
+        ).pack(side="left", padx=8)
+
         tk.Button(
             btn_frame, text="New comparison", command=self._reset,
             font=("Helvetica", 11), relief="flat", bg="#e8e8ed", fg=TEXT,
@@ -383,11 +445,11 @@ class App(tk.Tk):
         tree = ttk.Treeview(parent, columns=columns, show="headings", height=15)
 
         col_widths = {
-            "Barcode": 100,
-            "Old name": 220,
+            "Index": 100,
+            "Base name": 220,
             "New name": 200,
             "Cost": 80,
-            "Old": 80,
+            "Base": 80,
             "New": 80,
             "Change": 80,
         }
@@ -404,6 +466,39 @@ class App(tk.Tk):
         tree.configure(yscrollcommand=scrollbar.set)
         tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
+    def _export_csv(self):
+        try:
+            multiplier = float(self._multiplier_var.get())
+        except ValueError:
+            messagebox.showerror("Error", "Invalid multiplier value.")
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="Save modified CSV",
+            defaultextension=".csv",
+            filetypes=[("CSV file", "*.csv")],
+            initialfile="catalog_modified.csv",
+        )
+        if not path:
+            return
+
+        cols = {
+            "barcode": self._base_barcode_col,
+            "cost": self._base_cost_col,
+            "price": self._base_price_col,
+            "inventory_qty": self._base_inv_qty_col,
+            "continue_selling": self._base_continue_col,
+        }
+
+        try:
+            export_modified_csv(
+                self.old_path, path, self.old_rows, self.old_headers,
+                cols, self.result, multiplier,
+            )
+            messagebox.showinfo("Success", f"CSV exported:\n{path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Unable to export CSV:\n{e}")
 
     def _export_pdf(self):
         path = filedialog.asksaveasfilename(

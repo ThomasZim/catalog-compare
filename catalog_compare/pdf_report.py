@@ -87,7 +87,7 @@ def generate_pdf(result: ComparisonResult, output_path: str):
     # Metadata
     pdf.set_font("Helvetica", "", 9)
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    pdf.cell(0, 6, f"Date: {now}  |  Old: {result.old_count} products  |  New: {result.new_count} products",
+    pdf.cell(0, 6, f"Date: {now}  |  Base: {result.old_count} products  |  New: {result.new_count} products",
              align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
@@ -110,7 +110,7 @@ def generate_pdf(result: ComparisonResult, output_path: str):
     pdf.set_text_color(0, 0, 0)
 
     if result.appeared:
-        cols_app = [("Barcode", 50), ("Name", page_width - 85), ("Cost", 35)]
+        cols_app = [("Index", 50), ("Name", page_width - 85), ("Cost", 35)]
         _draw_table_header(pdf, cols_app)
         for i, p in enumerate(result.appeared):
             _draw_row(pdf, cols_app, [p.barcode, p.name, _fmt_cost(p.cost)], fill=(i % 2 == 0), align_list=["L", "L", "R"])
@@ -127,7 +127,7 @@ def generate_pdf(result: ComparisonResult, output_path: str):
     pdf.set_text_color(0, 0, 0)
 
     if result.disappeared:
-        cols_dis = [("Barcode", 50), ("Name", page_width - 85), ("Cost", 35)]
+        cols_dis = [("Index", 50), ("Name", page_width - 85), ("Cost", 35)]
         _draw_table_header(pdf, cols_dis)
         for i, p in enumerate(result.disappeared):
             _draw_row(pdf, cols_dis, [p.barcode, p.name, _fmt_cost(p.cost)], fill=(i % 2 == 0), align_list=["L", "L", "R"])
@@ -147,10 +147,10 @@ def generate_pdf(result: ComparisonResult, output_path: str):
         col_w = page_width
         name_w = int((col_w - 120) / 2)
         cols_chg = [
-            ("Barcode", 35),
-            ("Old name", name_w),
+            ("Index", 35),
+            ("Base name", name_w),
             ("New name", name_w),
-            ("Old", 30),
+            ("Base", 30),
             ("New", 30),
             ("Change", 25),
         ]
