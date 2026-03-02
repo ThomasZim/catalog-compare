@@ -1,0 +1,64 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pyinstaller
+      - run: |
+          pyinstaller --onefile --windowed \
+            --name "Catalog Compare" \
+            --collect-all fpdf2 \
+            run.py
+      - run: cd dist && zip -r "Catalog-Compare-macOS.zip" "Catalog Compare.app" || zip -r "Catalog-Compare-macOS.zip" "Catalog Compare"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/Catalog-Compare-macOS.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --onefile --windowed --name "Catalog Compare" --collect-all fpdf2 run.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/Catalog Compare.exe
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-app
+          path: artifacts/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: artifacts/windows
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/macos/Catalog-Compare-macOS.zip
+            artifacts/windows/Catalog Compare.exe
+          generate_release_notes: true
