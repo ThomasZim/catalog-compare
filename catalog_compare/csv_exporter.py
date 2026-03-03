@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 
-from .comparator import ComparisonResult
+from .comparator import ComparisonResult, normalize_barcode
 from .csv_parser import detect_delimiter, detect_encoding
 
 
@@ -59,7 +59,7 @@ def export_modified_csv(
             output_rows.append(new_row)
             continue
 
-        barcode = row[barcode_col].strip()
+        barcode = normalize_barcode(row[barcode_col])
         if not barcode:
             output_rows.append(new_row)
             continue

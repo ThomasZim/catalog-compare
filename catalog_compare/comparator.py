@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .cost_parser import parse_cost
+
+
+def normalize_barcode(raw: str) -> str:
+    """Ne garde que les chiffres d'un barcode (supprime espaces, apostrophes, etc.)."""
+    return re.sub(r"\D", "", raw)
 
 
 @dataclass
@@ -50,7 +56,7 @@ def build_index(
         if barcode_col >= len(row) or name_col >= len(row):
             continue
 
-        barcode = row[barcode_col].strip()
+        barcode = normalize_barcode(row[barcode_col])
         if not barcode:
             continue
 
