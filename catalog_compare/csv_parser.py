@@ -1,4 +1,4 @@
-"""Parsing CSV intelligent avec gestion encoding, BOM, et séparateurs."""
+"""Smart CSV parsing with encoding, BOM, and delimiter handling."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import io
 
 
 def detect_encoding(file_path: str) -> str:
-    """Détecte l'encoding d'un fichier CSV."""
+    """Detect the encoding of a CSV file."""
     encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
     for enc in encodings:
         try:
@@ -20,7 +20,7 @@ def detect_encoding(file_path: str) -> str:
 
 
 def detect_delimiter(sample: str) -> str:
-    """Détecte le délimiteur (virgule, point-virgule, tab)."""
+    """Detect the delimiter (comma, semicolon, tab)."""
     sniffer = csv.Sniffer()
     try:
         dialect = sniffer.sniff(sample, delimiters=",;\t")
@@ -30,31 +30,31 @@ def detect_delimiter(sample: str) -> str:
 
 
 def _unwrap_quoted_rows(lines: list[str]) -> list[str]:
-    """Corrige les CSV dont chaque ligne de données est enveloppée dans des guillemets.
+    """Fix CSVs where each data row is wrapped in quotes.
 
-    Certains exports (ex: Shopify) encapsulent chaque ligne dans "...",
-    avec des guillemets internes doublés "". On retire l'enveloppe et
-    on restaure les guillemets internes.
+    Some exports (e.g. Shopify) wrap each row in "...",
+    with internal quotes doubled "". We remove the wrapping and
+    restore the internal quotes.
     """
     if len(lines) < 2:
         return lines
 
-    # Vérifier si les lignes de données sont enveloppées
+    # Check if data rows are wrapped
     test_line = lines[1].strip()
     if not (test_line.startswith('"') and test_line.endswith('"')):
         return lines
 
-    # Tester : parser la ligne enveloppée donne-t-elle un seul champ ?
+    # Test: does parsing the wrapped line yield a single field?
     parsed = list(csv.reader([lines[1].strip()]))[0]
     header_count = len(list(csv.reader([lines[0].strip()]))[0])
     if len(parsed) >= header_count // 2:
-        return lines  # Pas enveloppé, le parsing normal fonctionne
+        return lines  # Not wrapped, normal parsing works
 
     result = [lines[0]]
     for line in lines[1:]:
         stripped = line.strip()
         if stripped.startswith('"') and stripped.endswith('"'):
-            # Retirer les guillemets externes et restaurer les internes
+            # Remove outer quotes and restore inner ones
             inner = stripped[1:-1].replace('""', '"')
             result.append(inner + "\n")
         else:
@@ -64,9 +64,9 @@ def _unwrap_quoted_rows(lines: list[str]) -> list[str]:
 
 
 def parse_csv(file_path: str) -> tuple[list[str], list[list[str]]]:
-    """Parse un fichier CSV et retourne (headers, rows).
+    """Parse a CSV file and return (headers, rows).
 
-    Gère : encoding varié, BOM, délimiteurs multiples, lignes enveloppées.
+    Handles: varied encoding, BOM, multiple delimiters, wrapped rows.
     """
     encoding = detect_encoding(file_path)
 
@@ -76,7 +76,7 @@ def parse_csv(file_path: str) -> tuple[list[str], list[list[str]]]:
     if not lines:
         return [], []
 
-    # Corriger les CSV avec lignes enveloppées dans des guillemets
+    # Fix CSVs with quote-wrapped rows
     lines = _unwrap_quoted_rows(lines)
 
     delimiter = detect_delimiter(lines[0])
@@ -94,9 +94,9 @@ def parse_csv(file_path: str) -> tuple[list[str], list[list[str]]]:
 
 
 def auto_detect_columns(headers: list[str]) -> dict[str, int | None]:
-    """Auto-détecte les colonnes barcode, cost, name.
+    """Auto-detect barcode, cost, name columns.
 
-    Retourne un dict avec les indices détectés (ou None).
+    Returns a dict with detected indices (or None).
     """
     result = {"barcode": None, "cost": None, "name": None}
 
@@ -117,26 +117,26 @@ def auto_detect_columns(headers: list[str]) -> dict[str, int | None]:
 
 
 def auto_detect_base_columns(headers: list[str]) -> dict[str, int | None]:
-    """Auto-détecte les colonnes supplémentaires du CSV base (Shopify).
+    """Auto-detect additional columns from the base CSV (Shopify).
 
-    Détecte : price (prix de vente), inventory_qty, continue_selling.
+    Detects: price (selling price), inventory_qty, continue_selling.
     """
     result = {"price": None, "inventory_qty": None, "continue_selling": None}
 
     lower_headers = [h.lower().strip() for h in headers]
 
     for i, h in enumerate(lower_headers):
-        # Price : chercher "price"/"prix" en excluant "cost"/"cout"/"compare"
+        # Price: look for "price"/"prix" excluding "cost"/"cout"/"compare"
         if result["price"] is None and ("price" in h or "prix" in h):
             if not any(excl in h for excl in ["cost", "cout", "coût", "compare"]):
                 result["price"] = i
 
-        # Inventory qty : "inventory" + "qty"/"quantity", ou "stock"
+        # Inventory qty: "inventory" + "qty"/"quantity", or "stock"
         if result["inventory_qty"] is None:
             if ("inventory" in h and ("qty" in h or "quantity" in h)) or h == "stock":
                 result["inventory_qty"] = i
 
-        # Continue selling : "inventory policy" ou "continue selling"
+        # Continue selling: "inventory policy" or "continue selling"
         if result["continue_selling"] is None:
             if "inventory policy" in h or "continue selling" in h:
                 result["continue_selling"] = i
