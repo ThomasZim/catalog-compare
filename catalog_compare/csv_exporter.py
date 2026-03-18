@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import os
 
 from .comparator import ComparisonResult, normalize_barcode
 from .csv_parser import detect_delimiter, detect_encoding
@@ -23,11 +24,15 @@ def export_modified_csv(
     - Désactive les produits disparus (inventory qty = 0, continue selling = deny)
     - Préserve l'encoding et le delimiter de l'original
     """
-    encoding = detect_encoding(base_path)
-
-    with open(base_path, "r", encoding=encoding) as f:
-        sample = f.readline()
-    delimiter = detect_delimiter(sample)
+    ext = os.path.splitext(base_path)[1].lower()
+    if ext == ".xlsx":
+        encoding = "utf-8"
+        delimiter = ","
+    else:
+        encoding = detect_encoding(base_path)
+        with open(base_path, "r", encoding=encoding) as f:
+            sample = f.readline()
+        delimiter = detect_delimiter(sample)
 
     barcode_col = cols["barcode"]
     cost_col = cols["cost"]

@@ -7,7 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .comparator import ComparisonResult, compare_catalogs
 from .csv_exporter import export_modified_csv
-from .csv_parser import auto_detect_base_columns, auto_detect_columns, parse_csv
+from .csv_parser import auto_detect_base_columns, auto_detect_columns, parse_catalog
 from .pdf_report import generate_pdf
 
 # Colors
@@ -78,7 +78,7 @@ class App(tk.Tk):
             font=("Helvetica", 22, "bold"), bg=BG, fg=TEXT,
         ).pack(pady=(20, 5))
         tk.Label(
-            self._container, text="Select the two CSV files to compare",
+            self._container, text="Select the two files to compare (CSV or XLSX)",
             font=("Helvetica", 12), bg=BG, fg=TEXT_LIGHT,
         ).pack(pady=(0, 30))
 
@@ -131,7 +131,7 @@ class App(tk.Tk):
     def _browse_old(self):
         path = filedialog.askopenfilename(
             title="Select the base catalog",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            filetypes=[("Catalog files", "*.csv *.xlsx"), ("CSV files", "*.csv"), ("Excel files", "*.xlsx"), ("All files", "*.*")],
         )
         if path:
             self.old_path = path
@@ -141,7 +141,7 @@ class App(tk.Tk):
     def _browse_new(self):
         path = filedialog.askopenfilename(
             title="Select the new catalog",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            filetypes=[("Catalog files", "*.csv *.xlsx"), ("CSV files", "*.csv"), ("Excel files", "*.xlsx"), ("All files", "*.*")],
         )
         if path:
             self.new_path = path
@@ -156,10 +156,10 @@ class App(tk.Tk):
 
     def _go_to_screen2(self):
         try:
-            self.old_headers, self.old_rows = parse_csv(self.old_path)
-            self.new_headers, self.new_rows = parse_csv(self.new_path)
+            self.old_headers, self.old_rows = parse_catalog(self.old_path)
+            self.new_headers, self.new_rows = parse_catalog(self.new_path)
         except Exception as e:
-            messagebox.showerror("Error", f"Unable to read CSV files:\n{e}")
+            messagebox.showerror("Error", f"Unable to read files:\n{e}")
             return
 
         self._show_screen2()

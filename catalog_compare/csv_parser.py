@@ -1,9 +1,10 @@
-"""Smart CSV parsing with encoding, BOM, and delimiter handling."""
+"""Smart CSV/XLSX parsing with encoding, BOM, and delimiter handling."""
 
 from __future__ import annotations
 
 import csv
 import io
+import os
 
 
 def detect_encoding(file_path: str) -> str:
@@ -91,6 +92,54 @@ def parse_csv(file_path: str) -> tuple[list[str], list[list[str]]]:
     data = rows[1:]
 
     return headers, data
+
+
+def _cell_to_str(value) -> str:
+    """Convert a cell value to string, handling None and float-encoded integers."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and value == int(value):
+        return str(int(value))
+    return str(value)
+
+
+def parse_xlsx(file_path: str) -> tuple[list[str], list[list[str]]]:
+    """Parse an XLSX file (first sheet only) and return (headers, rows)."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    ws = wb.worksheets[0]
+
+    all_rows = []
+    for row in ws.iter_rows():
+        all_rows.append([_cell_to_str(cell.value) for cell in row])
+
+    wb.close()
+
+    if not all_rows:
+        return [], []
+
+    headers = [h.strip() for h in all_rows[0]]
+    col_count = len(headers)
+
+    # Normalize row lengths to match header count
+    data = []
+    for row in all_rows[1:]:
+        if len(row) < col_count:
+            row = row + [""] * (col_count - len(row))
+        elif len(row) > col_count:
+            row = row[:col_count]
+        data.append(row)
+
+    return headers, data
+
+
+def parse_catalog(file_path: str) -> tuple[list[str], list[list[str]]]:
+    """Route to the correct parser based on file extension."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == ".xlsx":
+        return parse_xlsx(file_path)
+    return parse_csv(file_path)
 
 
 def auto_detect_columns(headers: list[str]) -> dict[str, int | None]:
